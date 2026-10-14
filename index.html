@@ -1,0 +1,395 @@
+<head>
+  <title>Sequencer Sketch</title>
+  <style>
+
+    body {
+      text-align: center;
+      font-family: sans-serif;
+      overflow: hidden;
+    }
+
+    .sequencerButton {
+      border: 1px solid;
+      border-radius: 2px;
+      width: 25px;
+      height: 20px;
+      display: inline-block;
+    }
+    
+    .sequencerButton:hover {
+      cursor: pointer;
+      background-color: #DDDDDD;
+    }
+
+    .activeButton:hover {
+      background-color: rgb(53, 37, 132);
+    }
+
+    .label {
+        display: inline;
+        margin: 0 10px 0 0;
+        padding: 0;
+        width: 100px;
+        text-align: right;
+    }
+
+    svg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: -124;
+      width: 100%;
+    }
+    
+  </style>
+</head>
+
+
+<body onload="init()">
+
+  <h1>Basic Drum Sequencer</h1>
+
+  <div id="mainContainer">
+    <div class="instrument">
+
+         <p class="label">
+            Kick
+         </p>
+
+        <div class="sequencerContainer">
+        
+        </div>
+        <br>
+
+
+    </div>
+   
+  </div>
+  
+  
+  
+  
+  <div id="template" style="display:none">
+    <div class="sequencerButton" onclick="toggleButton(this)">
+      
+    </div>
+  </div>
+
+  <audio preload="auto" src="sgm_power_kick.wav" id="kick"></audio>
+  <audio preload="auto" src="sgm_power_snare.wav" id="snare"></audio>
+  <audio preload="auto" src="sgm_power_chat.wav" id="closedhat"></audio>
+  <audio preload="auto" src="sgm_power_ohat.wav" id="openhat"></audio>
+  <audio preload="auto" src="sgm_power_cymbal.wav" id="cymbal"></audio>
+  
+
+
+
+</body>
+<script src="https://cdn.jsdelivr.net/gh/netizenorg/netnet-standard-library/build/nn.min.js"></script>
+<script>
+  function init(){
+
+    svg = nn.create('svg').addTo('body')
+
+    bpm = 120;
+
+    instruments = [
+        {
+            label: "Kick",
+            audio: document.getElementById("kick"),
+        },
+        {
+            label: "Snare",
+            audio: document.getElementById("snare")
+        },
+        {
+            label: "Closed Hat",
+            audio: document.getElementById("closedhat")
+        },
+        {
+            label: "Open Hat",
+            audio: document.getElementById("openhat")
+        },
+        {
+            label: "Cymbal",
+            audio: document.getElementById("cymbal")
+        }
+
+    ];
+
+    // Populate first row of cells, then clone it 5 times for 5 instruments.
+
+    let mainContainer = document.getElementById("mainContainer");
+    let sButtonTemplate = document.querySelector(".sequencerButton");
+    
+    let sContainer = document.querySelector(".sequencerContainer");
+    
+    for (let col = 0; col < 16; col++){
+      let newButton = sButtonTemplate.cloneNode();
+      
+      if (col%4 === 0){
+        newButton.style.borderLeft = "solid 2px";
+      }
+      
+      sContainer.appendChild(newButton)
+    }
+
+    let iContainer = document.querySelector(".instrument");
+
+    for (let row = 0; row < 4; row++){
+        let newRow = iContainer.cloneNode(true);
+
+        newRow.querySelector(".label").innerText = instruments[row + 1].label;
+
+        mainContainer.appendChild(newRow);
+
+        
+    }
+
+    playhead = 0;
+
+    window.setInterval(function(){
+      playCells(playhead)
+
+      playhead = (playhead + 1)%16;
+    }, (60 * 1000)/(bpm*4));
+  }
+
+
+  function getElementIndex(element){
+    // Gets the index of the element's position within its parent.
+
+    let p = element.parentElement;
+
+    for (var i = 0; i<p.children.length; i++){
+      if (p.children[i] == element){
+        return i;
+      }
+    }
+
+    // shouldnt ever return
+    return -1;
+  }
+
+  function computeCellColor(element){
+    
+    let x = getElementIndex(element);
+    let y = getElementIndex(element.closest(".instrument"));
+
+    let h = 0;
+    let s = 0;
+    let l = 100;
+
+    if (element.classList.contains("activeButton")){
+      h = y * (360/5) + x * 2;
+      s = 50 + x * 4;
+      l = 50 + x;
+    }
+    
+
+    if (playhead == x){
+      l -= 20;
+    }
+
+    element.style.backgroundColor = nn.hsl(h, s, l);
+  }
+
+  function toggleButton(element){
+    element.classList.toggle("activeButton")
+
+    if (element.classList.contains("activeButton")){
+      computeCellColor(element);
+    }
+    else {
+      element.style.backgroundColor = "";
+    }
+  }
+
+  function playCells(playheadPosition){
+    let mainContainer = document.getElementById("mainContainer");
+
+    // iterate over every instrument
+
+    for (var i = 0; i < 5; i++){
+
+      // grabs the cell at the current playhead position in the instrument
+      let cell = mainContainer.children[i].querySelector(".sequencerContainer").children[playheadPosition];
+
+      computeCellColor(cell);
+
+      if (cell.classList.contains("activeButton")){
+        instruments[i].audio.currentTime = 0;
+        instruments[i].audio.play();
+
+        let x = getElementIndex(cell);
+
+        switch (i){
+          case 0:
+            drop(x);
+          break;
+          case 1:
+            snare(1);
+            snare(2);
+          break;
+          case 2:
+            hat();
+          break;
+          case 3:
+            hat2();
+
+          break;
+          case 4:
+            cymbal();
+          break;
+        }
+
+        if (i == 2){ // hardcoded but like stops the open hat if the closed hat plays
+          instruments[3].audio.pause();
+        }
+      }
+
+
+    }
+
+    // fix the colors of the old cells (this is a dumb way of doing this)
+    for (var i = 0; i < 5; i++){
+
+      // grabs the cell at the current playhead position in the instrument
+      let cell = mainContainer.children[i].querySelector(".sequencerContainer").children[(playheadPosition + 15)%16];
+      
+
+      
+      computeCellColor(cell);
+
+    }
+  }
+
+  function drop (position) {
+    const clr = nn.hsl(20, 100, 50)
+    const x = window.innerWidth/16 * position;
+    const y = window.innerHeight - 50
+    const size = 100
+    const rect = svg.rect(-size/2, -size/2, size, size).fill(clr)
+
+
+    rect.style.transformOrigin = "center";
+  
+    const timing = {
+      duration: 600, 
+      easing: 'ease-out'
+    }
+
+    let keyframes = [
+      { transform : 'translateY(' + y + 'px) translateX(' + 50 + 'px) rotate(0deg) ', opacity: 0 },
+      { transform : 'translateY(' + (y - 40) + 'px) rotate(90deg) ', opacity: 1 },
+      { transform : 'translateY(' + (y - 80)+ 'px) rotate(180deg))', opacity: 0 }
+    ]
+
+    if (position % 2){
+      keyframes = [
+      { transform : 'translateY(' + y + 'px) translateX(' - 50 + 'px) rotate(0deg) ', opacity: 0 },
+      { transform : 'translateY(' + (y - 40) + 'px) rotate(90deg) ', opacity: 1 },
+      { transform : 'translateY(' + (y - 80)+ 'px) rotate(180deg))', opacity: 0 }
+    ]
+
+    }
+
+    
+    const anim = rect.animate(keyframes, timing)
+    anim.onfinish = () => rect.remove()
+  }
+
+  function snare (s){
+    const clr = nn.hsl(80, 100, 50);
+    const x = window.innerWidth/2
+    const y = window.innerHeight/2
+    const r = 70 + 20 * s
+    const circ = svg.circle(x, y, r).fill(clr)
+  
+    const timing = {
+      duration: 700 - s * 100, 
+      easing: 'ease-out'
+    }
+    const keyframes = [
+      { r: 0, opacity: 0 },
+      { r: r, opacity: 1 },
+      { r: r * 3, opacity: 0 }
+    ]
+    const anim = circ.animate(keyframes, timing)
+    anim.onfinish = () => circ.remove()
+  }
+
+  function hat(){
+    const clr = nn.hsl(140, 100, 50);
+    const x = nn.random(nn.width)
+    const y = nn.random(nn.height)
+    const r = 20
+    const circ = svg.circle(0, 0, r).stroke(clr)
+
+    circ.fill("none");
+
+    
+  
+    const timing = {
+      duration: 600, 
+      easing: 'ease-out'
+    }
+    const keyframes = [
+      {transform: "translate(" + x + "px,"+ y +"px)", strokeWidth: "2px", r: 20, opacity: 1 },
+      {transform: "translate(" + (x - 40) + "px,"+ y +"px)", strokeWidth: "8px", r: 30, opacity: 0.6 },
+      {transform: "translate(" + (x - 90) + "px,"+ y +"px)", strokeWidth: "24px", r: 40, opacity: 0 }
+    ]
+    const anim = circ.animate(keyframes, timing)
+    anim.onfinish = () => circ.remove()
+  }
+
+  function hat2(){
+    const clr = nn.hsl(210, 100, 50);
+    const x = nn.random(nn.width)
+    const y = nn.random(nn.height - 150)
+    const width = 30;
+    const height = 150;
+    const rect = svg.rect(x, y, width, height).fill(clr)
+
+    
+  
+    const timing = {
+      duration: 600, 
+      easing: 'ease-out'
+    }
+    let keyframes = [
+      { x: x, opacity: 1 },
+      { x: x - 200, opacity: 0.3 },
+      { x: x - 500, opacity: 0 }
+    ];
+    const anim = rect.animate(keyframes, timing)
+    anim.onfinish = () => rect.remove()
+  }
+
+
+  function cymbal(){
+    const clr = nn.hsl(300, 100, 50)
+    const x = 0;
+    const y = 0
+    const width = nn.width;
+    const height = 0;
+    const rect = svg.rect(x, y, width, height).fill(clr)
+
+    const timing = {
+      duration: 700, 
+      easing: 'ease-out'
+    }
+
+    let keyframes = [
+      { height: 0, opacity: 1 },
+      { height: "200px", opacity: 0.3 },
+      { height: "400px", opacity: 0 }
+    ];
+
+    
+    const anim = rect.animate(keyframes, timing)
+    anim.onfinish = () => rect.remove()
+  }
+
+
+</script>
